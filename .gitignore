@@ -1,0 +1,9 @@
+# Sample / test journal data — contains real-looking financial and
+# personal data, kept out of the public repo on purpose.
+*.csv
+*.xlsx
+*.xls
+
+# Python
+__pycache__/
+*.pyc
