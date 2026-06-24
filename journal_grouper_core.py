@@ -168,6 +168,28 @@ def flag_zero_amount_lines(rows):
 # Step 2 — Group by date
 # ---------------------------------------------------------------------------
 
+def forward_fill_dates(rows):
+    """Some exports leave Date de facturation blank on every line of an
+    entry after its first — a flattened merged-cell convention, since all
+    lines of one entry visually share the same date. Bucketing strictly by
+    the literal value (below) would otherwise split such an entry's own
+    lines into two buckets — its first line under the real date, the rest
+    under "" — breaking balancing entirely. This fills each blank date with
+    the most recently seen non-blank one, in original file order, so the
+    entry's lines land in the same bucket regardless of which lines in the
+    source actually carried the date."""
+    filled = []
+    last_date = ""
+    for row in rows:
+        date = row.get(COL_DATE, "")
+        if isinstance(date, str) and date.strip():
+            last_date = date.strip()
+            filled.append(row)
+        else:
+            filled.append({**row, COL_DATE: last_date})
+    return filled
+
+
 def group_by_date(rows):
     buckets = {}
     for row in rows:
@@ -814,6 +836,7 @@ def process_and_report(rows, label=None, log=print):
 
     all_flagged = list(zero_flagged)
 
+    rows = forward_fill_dates(rows)
     date_buckets = group_by_date(rows)
     log(f"{prefix}Found {len(date_buckets)} distinct date(s)")
 
