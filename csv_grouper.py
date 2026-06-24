@@ -1,6 +1,6 @@
 """
-journal_grouper.py
-==================
+csv_grouper.py
+==============
 CSV entry point for the journal-entry grouping algorithm. Groups accounting
 journal entry lines from a single-journal CSV file into balanced entries.
 
@@ -11,7 +11,7 @@ excel_grouper.py for the equivalent multi-sheet Excel entry point (same
 core logic, different file format).
 
 Usage:
-    python journal_grouper.py input.csv [clients.csv]
+    python csv_grouper.py input.csv [clients.csv]
 
 The output is written next to the input as <input>_processed.csv. If a
 clients list is given (and exists), Partenaire values not found in it are
@@ -128,6 +128,6 @@ def run(input_path, clients_path=None):
 
 if __name__ == "__main__":
     if len(sys.argv) not in (2, 3):
-        print("Usage: python journal_grouper.py <input.csv> [clients.csv]")
+        print("Usage: python csv_grouper.py <input.csv> [clients.csv]")
         sys.exit(1)
     run(sys.argv[1], sys.argv[2] if len(sys.argv) == 3 else None)

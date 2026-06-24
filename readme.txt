@@ -132,7 +132,7 @@ output and use the exact same grouping logic underneath.
 
 For a single journal in a CSV file:
 
-    python journal_grouper.py input.csv [clients.csv]
+    python csv_grouper.py input.csv [clients.csv]
 
 For a workbook with multiple journals, one per sheet:
 

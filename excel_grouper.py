@@ -10,7 +10,7 @@ per journal.
 All algorithm logic lives in journal_grouper_core.py — this file only
 handles reading workbook sheets into row dicts and writing the result back
 out as a new workbook (one output sheet per input sheet). See algorithm.txt
-for the full step-by-step specification, and journal_grouper.py for the
+for the full step-by-step specification, and csv_grouper.py for the
 equivalent single-journal CSV entry point (same core logic, different file
 format).
 
@@ -29,7 +29,7 @@ import datetime
 import openpyxl
 
 import journal_grouper_core as core
-from journal_grouper import derive_path, load_clients
+from csv_grouper import derive_path, load_clients
 
 
 def cell_to_text(value):

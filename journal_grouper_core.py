@@ -13,7 +13,7 @@ of row dicts. Each row dict must carry:
   - the text fields named by COL_JOURNAL, COL_CODE, COL_DATE, COL_COMM,
     COL_PARTNER, COL_DEBIT, COL_CREDIT
 
-Both journal_grouper.py (CSV) and excel_grouper.py (Excel) parse their own
+Both csv_grouper.py (CSV) and excel_grouper.py (Excel) parse their own
 input format into this shape, call process_and_report() here, and then
 format the result (generate_output_rows()) into their own output format.
 This keeps the algorithm itself in exactly one place.
