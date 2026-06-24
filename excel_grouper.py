@@ -15,15 +15,21 @@ equivalent single-journal CSV entry point (same core logic, different file
 format).
 
 Usage:
-    python excel_grouper.py input.xlsx output.xlsx
+    python excel_grouper.py input.xlsx [clients.csv]
+
+The output is written next to the input as <input>_processed.xlsx. If a
+clients list is given (and exists), an extra "Missing Clients" sheet is
+appended listing Partenaire values not found in it, per source sheet.
 """
 
+import os
 import sys
 import datetime
 
 import openpyxl
 
 import journal_grouper_core as core
+from journal_grouper import derive_path, load_clients
 
 
 def cell_to_text(value):
@@ -109,16 +115,34 @@ def write_sheet(ws_out, confirmed_groups, flagged_rows, fieldnames, resolution_m
             ws_out.append([payload] + [None] * (ncols - 1))
 
 
-def run(input_path, output_path):
+def write_missing_clients_sheet(wb_out, issues_by_sheet: dict) -> None:
+    ws = wb_out.create_sheet(title="Missing Clients")
+    ws.append(["Sheet", "Partenaire", "Occurrences", "Status", "Suggested match"])
+    for sheet_name, issues in issues_by_sheet.items():
+        for name, (count, status, best_match) in sorted(issues.items()):
+            status_text = "Possible typo — please verify" if status == core.REASON_PARTNER_TYPO else "Unknown"
+            ws.append([sheet_name, name, count, status_text, best_match])
+
+
+def run(input_path, clients_path=None):
     print(f"Reading: {input_path}")
     wb_in = openpyxl.load_workbook(input_path, data_only=True)
 
     wb_out = openpyxl.Workbook()
     wb_out.remove(wb_out.active)
 
-    total_confirmed = 0
-    total_flagged   = 0
-    any_errors      = False
+    known_names = None
+    if clients_path:
+        if not os.path.exists(clients_path):
+            print(f"Clients list not found, skipping partner check: {clients_path}")
+        else:
+            known_names = load_clients(clients_path)
+
+    total_confirmed   = 0
+    total_flagged     = 0
+    any_errors        = False
+    issues_by_sheet: dict[str, dict] = {}
+    skipped_sheets:  dict[str, list] = {}
 
     for sheet_name in wb_in.sheetnames:
         ws = wb_in[sheet_name]
@@ -128,6 +152,14 @@ def run(input_path, output_path):
         if not rows:
             print(f"[{sheet_name}] Empty sheet, skipping")
             wb_out.create_sheet(title=sheet_name)
+            continue
+
+        missing = core.validate_required_columns(fieldnames)
+        if missing:
+            print(f"[{sheet_name}] SKIPPED — missing required column(s): {', '.join(missing)}")
+            ws_out = wb_out.create_sheet(title=sheet_name)
+            ws_out.append([f"SKIPPED — missing required column(s): {', '.join(missing)}"])
+            skipped_sheets[sheet_name] = missing
             continue
 
         confirmed, flagged, resolution_meta, errors = core.process_and_report(
@@ -141,17 +173,43 @@ def run(input_path, output_path):
         ws_out = wb_out.create_sheet(title=sheet_name)
         write_sheet(ws_out, confirmed, flagged, fieldnames, resolution_meta)
 
+        if known_names is not None:
+            issues = core.find_partner_issues(rows, known_names)
+            if issues:
+                issues_by_sheet[sheet_name] = issues
+
     print(f"\n=== Summary across {len(wb_in.sheetnames)} sheet(s) ===")
     print(f"  Total confirmed entries : {total_confirmed}")
     print(f"  Total flagged rows      : {total_flagged}")
     print(f"  Verification           : {'FAILED — see above' if any_errors else 'all sheets passed'}")
+    if skipped_sheets:
+        print(f"  Skipped sheets          : {len(skipped_sheets)} (missing required columns)")
+        for sheet_name, missing in skipped_sheets.items():
+            print(f"    - {sheet_name}: missing {', '.join(missing)}")
 
+    if known_names is not None:
+        if issues_by_sheet:
+            write_missing_clients_sheet(wb_out, issues_by_sheet)
+            total_issues = sum(len(u) for u in issues_by_sheet.values())
+            total_typos = sum(
+                1 for u in issues_by_sheet.values() for _, status, _ in u.values()
+                if status == core.REASON_PARTNER_TYPO
+            )
+            print(
+                f"  Partner issues          : {total_issues} "
+                f"({total_typos} possible typo(s), {total_issues - total_typos} unknown) "
+                f"— see 'Missing Clients' sheet"
+            )
+        else:
+            print("  Partner issues          : none, all partners found in clients list")
+
+    output_path = derive_path(input_path, "_processed")
     wb_out.save(output_path)
     print(f"\nOutput written to: {output_path}")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python excel_grouper.py <input.xlsx> <output.xlsx>")
+    if len(sys.argv) not in (2, 3):
+        print("Usage: python excel_grouper.py <input.xlsx> [clients.csv]")
         sys.exit(1)
-    run(sys.argv[1], sys.argv[2])
+    run(sys.argv[1], sys.argv[2] if len(sys.argv) == 3 else None)

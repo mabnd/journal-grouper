@@ -14,6 +14,14 @@ The only field that is guaranteed to be shared across all lines of the same entr
 
 ---
 
+**Step 0 — Validate required columns**
+
+Before anything else, the header is checked for the five columns the algorithm actually depends on: Date de facturation, Communication, Partenaire, Débit, and Crédit. (Journal is exempt — a missing Journal column is an intentionally supported case, see Step 8c — and Code is exempt too, since it's carried through to the output but never read by any step.) None of these lookups would raise an error on their own if a column were simply absent — every read falls back to an empty value — but that fallback can silently produce a wrong-but-plausible result rather than an obvious failure. The clearest case is Communication: with that column missing, every line's blank communication is treated as identical to every other blank one, so the balance-first sweep in Step 3 never finds a reason to close a group, and two genuinely unrelated entries on the same date can be merged into a single confirmed entry that even reports a perfect confidence score. This step exists specifically to catch that class of problem before it happens.
+
+For a CSV journal, the whole run stops immediately if any required column is missing — no output file is written, only a message naming which column(s) are absent. For an Excel workbook, the check runs per sheet: a sheet missing a required column is skipped (a one-line marker naming the missing column(s) is written in its place) while every other sheet in the same workbook is still processed and written normally.
+
+---
+
 **Step 1 — Parse and clean the input**
 
 Before any grouping can happen, the raw data needs to be made arithmetically usable. This step reads the journal — a CSV file, or one sheet of an Excel workbook — strips whitespace from all column names and text values, and converts the debit and credit fields into actual floating point numbers the algorithm can perform arithmetic on. A CSV always stores these as French-formatted text; an Excel sheet may store them as native numbers already, or as the same French-formatted text, and both are handled.
@@ -103,6 +111,16 @@ Entries resolved by the sweep with all lines consecutive in the original file an
 **Step 8c — Produce the output**
 
 Confirmed entries are written to the output — a CSV file, or the corresponding sheet of an output Excel workbook when the input was one sheet of a multi-sheet workbook — in the order their first line appeared in the original input. For each entry the first line carries all fields in full — Journal, Date, Code, Communication, Partner, Debit, Credit — plus the Confidence Score and an empty Flag Reason column. All subsequent lines of the same entry leave the Journal and Date fields blank, making it visually clear where each entry starts and ends. A blank separator row is inserted between entries. A flagged section at the bottom lists all unresolved lines with their reason code and a confidence score of 0. For a multi-sheet workbook, each output sheet is self-contained — its own confirmed entries and its own flagged section — exactly as if that sheet's journal had been processed on its own.
+
+---
+
+**Step 9 — Partner existence check (optional)**
+
+If a clients list is supplied alongside the journal, an additional, independent check runs after all grouping is complete: every non-blank Partenaire value in the journal is normalized (trimmed and case-folded) and compared against the clients list's "Nom complet" column. This check has no effect on grouping, balancing, confirmed entries, or flagged rows — it only reports which Partenaire values were not found.
+
+Each unmatched value is further classified by the same fuzzy text-similarity measure used elsewhere for communications (Step 3's 95% threshold, but a lower 85% threshold here since partner names are shorter and more varied than communications). If an unmatched name is at or above that similarity to some known client name, it's reported as a probable typo together with its closest match, so a human can quickly verify whether it's the same client misspelled. Below that similarity, it's reported as a plain unknown with no suggested match. This is only a suggestion for review — never an automatic correction.
+
+For a CSV journal, the unmatched partner names (with their occurrence counts, classification, and suggested match if any) are written to a separate output file. For an Excel workbook, they are appended instead as one extra sheet in the same output workbook, since a workbook can hold more than one sheet but a CSV cannot. If no clients list is supplied, or the supplied path does not exist, this step is skipped entirely and nothing extra is produced.
 
 ---
 

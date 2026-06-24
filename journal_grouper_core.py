@@ -56,6 +56,23 @@ COL_PARTNER = "Partenaire"
 COL_DEBIT   = "Débit"
 COL_CREDIT  = "Crédit"
 
+# Columns the algorithm actually depends on. Missing any of these doesn't
+# raise an error on its own — every lookup falls back to "" or 0.0 — but it
+# silently changes behavior (e.g. a missing Communication column makes every
+# blank "match" every other blank, merging unrelated entries with full
+# confidence). COL_JOURNAL is deliberately excluded: a missing Journal column
+# is a supported case, handled by falling back to the sheet name. COL_CODE
+# is excluded too since it's pure passthrough, never read by the algorithm.
+REQUIRED_COLUMNS = [COL_DATE, COL_COMM, COL_PARTNER, COL_DEBIT, COL_CREDIT]
+
+
+def validate_required_columns(fieldnames) -> list[str]:
+    """Returns the subset of REQUIRED_COLUMNS missing from `fieldnames`,
+    preserving REQUIRED_COLUMNS order. Empty list means all present."""
+    present = set(fieldnames)
+    return [col for col in REQUIRED_COLUMNS if col not in present]
+
+
 # A balanced group is only kept open if the next line's communication
 # is at or above this similarity — otherwise it is closed and a new group starts.
 FUZZY_MERGE_THRESHOLD = 0.95
@@ -562,6 +579,65 @@ def resolve_date_bucket(date_rows, global_pool):
                 flagged.append({**row, "_flag_reason": REASON_INCOMPLETE})
 
     return confirmed, flagged, used_from_pool, resolution_meta
+
+
+# ---------------------------------------------------------------------------
+# Optional step — Partner existence check
+#
+# Independent of grouping/balancing: just reports which non-blank COL_PARTNER
+# values in the journal don't appear in a client list supplied by the caller.
+# Reading that client list is format-specific and lives in each entry point,
+# same as journal/Excel parsing — this only takes the resulting set of names.
+#
+# Unmatched names are further split into two buckets: "typo" (close enough to
+# one known name, by the same fuzzy comparison used for communications, that
+# it's probably that name misspelled) and "unknown" (no close match at all).
+# This is a suggestion for a human to verify, never an automatic correction.
+# ---------------------------------------------------------------------------
+
+# How close an unmatched partner name must be to a known client name to be
+# reported as a probable typo instead of a flat unknown.
+PARTNER_TYPO_THRESHOLD = 0.85
+
+REASON_PARTNER_TYPO    = "typo"
+REASON_PARTNER_UNKNOWN = "unknown"
+
+
+def normalize_partner_name(name) -> str:
+    return name.strip().casefold() if isinstance(name, str) else ""
+
+
+def find_partner_issues(rows, known_names: set) -> dict:
+    """Returns {partner name (as written in the journal): (line count,
+    status, best_match)} for every non-blank COL_PARTNER value whose
+    normalized form isn't exactly in `known_names`. status is
+    REASON_PARTNER_TYPO with best_match set to the closest known name when
+    similarity is at or above PARTNER_TYPO_THRESHOLD, otherwise
+    REASON_PARTNER_UNKNOWN with best_match empty."""
+    known_norms = {normalize_partner_name(n) for n in known_names}
+
+    counts: dict[str, int] = {}
+    for r in rows:
+        partner = r.get(COL_PARTNER, "")
+        if not isinstance(partner, str) or not partner.strip():
+            continue
+        if normalize_partner_name(partner) in known_norms:
+            continue
+        name = partner.strip()
+        counts[name] = counts.get(name, 0) + 1
+
+    issues: dict[str, tuple] = {}
+    for name, count in counts.items():
+        best_match, best_score = "", 0.0
+        for known_name in known_names:
+            score = comm_similarity(name, known_name)
+            if score > best_score:
+                best_score, best_match = score, known_name
+        if best_score >= PARTNER_TYPO_THRESHOLD:
+            issues[name] = (count, REASON_PARTNER_TYPO, best_match)
+        else:
+            issues[name] = (count, REASON_PARTNER_UNKNOWN, "")
+    return issues
 
 
 # ---------------------------------------------------------------------------

@@ -111,6 +111,9 @@ And underlying both: a guarantee, checked on every run for every journal,
 that the number of lines and the total debit/credit amounts going in exactly
 match what comes out.
 
+Optionally, you can also give it a clients list to check the Partenaire
+values against — see "How to run it" below.
+
 One thing worth knowing: some journals close out many small expense lines
 recorded on different days with a single summary line much later (a
 "running total since last close" style), instead of balancing within one
@@ -129,13 +132,27 @@ output and use the exact same grouping logic underneath.
 
 For a single journal in a CSV file:
 
-    python journal_grouper.py input.csv output.csv
+    python journal_grouper.py input.csv [clients.csv]
 
 For a workbook with multiple journals, one per sheet:
 
-    python excel_grouper.py input.xlsx output.xlsx
+    python excel_grouper.py input.xlsx [clients.csv]
 
-In both cases the first argument is the file to read and the second is
-where to write the result — the output file is created (or overwritten) at
-that path. If a sheet in the Excel workbook has no "Journal" column, the
-sheet's own name is used as the journal name automatically.
+The output is written next to the input automatically (input.csv produces
+input_processed.csv, and likewise for Excel) — no need to name it yourself.
+If a sheet in the Excel workbook has no "Journal" column, the sheet's own
+name is used as the journal name automatically.
+
+The clients.csv argument is optional. If given, partner names that don't
+appear in it are reported separately — as a second file for CSV input, or
+as an extra sheet for Excel input. The report tells apart names that look
+like a typo of a known client (with a suggested match to verify) from
+names with no close match at all.
+
+Both scripts expect the Date de facturation, Communication, Partenaire,
+Débit, and Crédit columns to be present (under those exact names) — these
+are what the grouping logic actually reads. If a CSV is missing one, the
+run stops before writing anything, so you don't get a wrong result by
+mistake. If an Excel sheet is missing one, only that sheet is skipped (with
+a clear note in its place) — the rest of the workbook still processes
+normally.
