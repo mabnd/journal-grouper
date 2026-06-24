@@ -1001,7 +1001,7 @@ def generate_output_rows(confirmed_groups, flagged_rows, fieldnames, resolution_
         yield ("blank", None)
 
     if flagged_rows:
-        yield ("header", "=== FLAGGED FOR MANUAL REVIEW ===")
+        yield ("header", "FLAGGED FOR MANUAL REVIEW")
         yield ("blank", None)
 
         for row in flagged_rows:
