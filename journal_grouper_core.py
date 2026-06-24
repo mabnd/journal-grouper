@@ -39,6 +39,7 @@ Duplicates are never removed or specially flagged; they are grouped and
 balanced like any other line.
 """
 
+import re
 from itertools import combinations
 from difflib import SequenceMatcher
 from collections import Counter
@@ -152,6 +153,38 @@ def parse_amount(value) -> float:
         return -result if negative else result
     except ValueError:
         return 0.0
+
+
+def normalize_date(value: str) -> str:
+    """Reformats a date string to dd/mm/yyyy for display, regardless of how
+    it arrived: the CSV/Excel "ddmmyy" convention (e.g. "020126"), an
+    ISO-style "yyyy-mm-dd", or dd/mm/yyyy already (zero-padded if needed).
+    Two-digit years are assumed to be 20xx. Anything that doesn't match a
+    recognized shape is returned unchanged rather than guessed at."""
+    if not isinstance(value, str):
+        return value
+    s = value.strip()
+    if not s:
+        return s
+
+    m = re.fullmatch(r"(\d{2})(\d{2})(\d{2})", s)
+    if m:
+        dd, mm, yy = m.groups()
+        return f"{dd}/{mm}/20{yy}"
+
+    m = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})", s)
+    if m:
+        dd, mm, yy = m.groups()
+        if len(yy) == 2:
+            yy = "20" + yy
+        return f"{dd.zfill(2)}/{mm.zfill(2)}/{yy}"
+
+    m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
+    if m:
+        yy, mm, dd = m.groups()
+        return f"{dd.zfill(2)}/{mm.zfill(2)}/{yy}"
+
+    return s
 
 
 def flag_zero_amount_lines(rows):

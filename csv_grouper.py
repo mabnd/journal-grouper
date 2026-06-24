@@ -36,6 +36,7 @@ def parse_csv(filepath: str) -> tuple[list[dict], list[str]]:
         fieldnames = [h.strip() for h in (reader.fieldnames or [])]
         for i, row in enumerate(reader):
             cleaned = {k.strip(): (v.strip() if v else "") for k, v in row.items()}
+            cleaned[core.COL_DATE]  = core.normalize_date(cleaned.get(core.COL_DATE, ""))
             cleaned["_idx"]        = i
             cleaned["_debit_val"]  = core.parse_amount(cleaned.get(core.COL_DEBIT,  ""))
             cleaned["_credit_val"] = core.parse_amount(cleaned.get(core.COL_CREDIT, ""))

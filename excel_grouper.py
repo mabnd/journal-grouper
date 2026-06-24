@@ -90,6 +90,7 @@ def read_sheet(ws, sheet_name: str) -> tuple[list[dict], list[str]]:
                 row[col] = value
             else:
                 row[col] = cell_to_text(value)
+        row[core.COL_DATE] = core.normalize_date(row.get(core.COL_DATE, ""))
         row["_idx"]        = idx
         row["_debit_val"]  = core.parse_amount(row.get(core.COL_DEBIT))
         row["_credit_val"] = core.parse_amount(row.get(core.COL_CREDIT))
