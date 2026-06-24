@@ -27,9 +27,15 @@ import sys
 import datetime
 
 import openpyxl
+from openpyxl.utils import get_column_letter
 
 import journal_grouper_core as core
 from csv_grouper import derive_path, load_clients
+
+# Column-width floor for autosize_columns(), in Excel's character units —
+# no ceiling, so a column always fits its longest cell in full.
+MIN_COLUMN_WIDTH = 8
+COLUMN_WIDTH_PADDING = 2
 
 
 def cell_to_text(value):
@@ -99,14 +105,31 @@ def read_sheet(ws, sheet_name: str) -> tuple[list[dict], list[str]]:
     return rows, fieldnames
 
 
+def autosize_columns(ws):
+    """Sets each column's width to fit its longest cell, within sane
+    bounds — output columns no longer line up 1:1 with the source's own
+    (renamed/reordered/merged), so mirroring the source's literal widths
+    isn't meaningful anymore; this fits the content actually written."""
+    widths = {}
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.value is None:
+                continue
+            widths[cell.column] = max(widths.get(cell.column, 0), len(str(cell.value)))
+    for col, length in widths.items():
+        letter = get_column_letter(col)
+        ws.column_dimensions[letter].width = max(length + COLUMN_WIDTH_PADDING, MIN_COLUMN_WIDTH)
+
+
 def write_sheet(ws_out, confirmed_groups, flagged_rows, fieldnames, resolution_meta):
-    ncols = len(fieldnames) + 2  # + CONFIDENCE_SCORE, FLAG_REASON
+    ncols = None
     output_fields = None
     for event, payload in core.generate_output_rows(
         confirmed_groups, flagged_rows, fieldnames, resolution_meta
     ):
         if event == "fields":
             output_fields = payload
+            ncols = len(output_fields)
             ws_out.append(output_fields)
         elif event == "row":
             ws_out.append([payload.get(k, "") for k in output_fields])
@@ -123,6 +146,7 @@ def write_missing_clients_sheet(wb_out, issues_by_sheet: dict) -> None:
         for name, (count, status, best_match) in sorted(issues.items()):
             status_text = "Possible typo — please verify" if status == core.REASON_PARTNER_TYPO else "Unknown"
             ws.append([sheet_name, name, count, status_text, best_match])
+    autosize_columns(ws)
 
 
 def run(input_path, clients_path=None):
@@ -173,6 +197,7 @@ def run(input_path, clients_path=None):
 
         ws_out = wb_out.create_sheet(title=sheet_name)
         write_sheet(ws_out, confirmed, flagged, fieldnames, resolution_meta)
+        autosize_columns(ws_out)
 
         if known_names is not None:
             issues = core.find_partner_issues(rows, known_names)

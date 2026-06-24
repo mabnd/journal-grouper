@@ -939,11 +939,50 @@ def process_and_report(rows, label=None, log=print):
 #   ("row", out_row_dict)            - one data row, keyed by output_fields
 #   ("blank", None)                  - a blank separator row
 #   ("header", text)                 - a section header (e.g. flagged banner)
+#
+# The output uses a fixed column layout matching an external import
+# template, independent of however the source file named/ordered its own
+# columns: Journal, Date, Référence, then the renamed core fields, then the
+# algorithm's own CONFIDENCE_SCORE/FLAG_REASON, then any columns from the
+# source that aren't one of the recognized core fields (carried through
+# unchanged, appended at the end, in their original order).
 # ---------------------------------------------------------------------------
 
+OUTPUT_COL_DATE      = "Date"
+OUTPUT_COL_REFERENCE = "Référence"
+OUTPUT_COL_CODE       = "Ecritures comptables / Compte"
+OUTPUT_COL_COMM       = "Ecritures comptables / Libellés"
+OUTPUT_COL_PARTNER    = "Ecritures comptables / partenaire"
+OUTPUT_COL_DEBIT      = "Ecritures comptables /Debit"
+OUTPUT_COL_CREDIT     = "Ecritures comptables /Credit"
+REFERENCE_VALUE       = "IMPORT MOUVEMENT"
+
+_CORE_INPUT_COLUMNS = {COL_JOURNAL, COL_CODE, COL_DATE, COL_COMM, COL_PARTNER, COL_DEBIT, COL_CREDIT}
+
+
 def generate_output_rows(confirmed_groups, flagged_rows, fieldnames, resolution_meta):
-    output_fields = fieldnames + ["CONFIDENCE_SCORE", "FLAG_REASON"]
+    extra_fields = [f for f in fieldnames if f not in _CORE_INPUT_COLUMNS]
+    output_fields = [
+        COL_JOURNAL, OUTPUT_COL_DATE, OUTPUT_COL_REFERENCE,
+        OUTPUT_COL_CODE, OUTPUT_COL_COMM, OUTPUT_COL_PARTNER,
+        OUTPUT_COL_DEBIT, OUTPUT_COL_CREDIT,
+        "CONFIDENCE_SCORE", "FLAG_REASON",
+    ] + extra_fields
     yield ("fields", output_fields)
+
+    def build_row(row, journal_val, date_val):
+        out_row = {k: "" for k in output_fields}
+        out_row[COL_JOURNAL]          = journal_val
+        out_row[OUTPUT_COL_DATE]      = date_val
+        out_row[OUTPUT_COL_REFERENCE] = REFERENCE_VALUE if journal_val and date_val else ""
+        out_row[OUTPUT_COL_CODE]      = row.get(COL_CODE, "")
+        out_row[OUTPUT_COL_COMM]      = row.get(COL_COMM, "")
+        out_row[OUTPUT_COL_PARTNER]   = row.get(COL_PARTNER, "")
+        out_row[OUTPUT_COL_DEBIT]     = row.get(COL_DEBIT, "")
+        out_row[OUTPUT_COL_CREDIT]    = row.get(COL_CREDIT, "")
+        for f in extra_fields:
+            out_row[f] = row.get(f, "")
+        return out_row
 
     confirmed_sorted = sorted(confirmed_groups, key=lambda g: g[0]["_idx"])
 
@@ -953,14 +992,10 @@ def generate_output_rows(confirmed_groups, flagged_rows, fieldnames, resolution_
         score      = compute_confidence(group, resolution, stray_count, stray_crossdate)
 
         for i, row in enumerate(group):
-            out_row = {k: row.get(k, "") for k in output_fields}
-            out_row["FLAG_REASON"] = ""
-            if i == 0:
-                out_row["CONFIDENCE_SCORE"] = score
-            else:
-                out_row["CONFIDENCE_SCORE"] = ""
-                out_row[COL_JOURNAL] = ""
-                out_row[COL_DATE]    = ""
+            journal_val, date_val = (row.get(COL_JOURNAL, ""), row.get(COL_DATE, "")) if i == 0 else ("", "")
+            out_row = build_row(row, journal_val, date_val)
+            out_row["FLAG_REASON"]      = ""
+            out_row["CONFIDENCE_SCORE"] = score if i == 0 else ""
             yield ("row", out_row)
 
         yield ("blank", None)
@@ -970,7 +1005,7 @@ def generate_output_rows(confirmed_groups, flagged_rows, fieldnames, resolution_
         yield ("blank", None)
 
         for row in flagged_rows:
-            out_row = {k: row.get(k, "") for k in output_fields}
+            out_row = build_row(row, row.get(COL_JOURNAL, ""), row.get(COL_DATE, ""))
             out_row["CONFIDENCE_SCORE"] = 0
             out_row["FLAG_REASON"]      = row.get("_flag_reason", "")
             yield ("row", out_row)
