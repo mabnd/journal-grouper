@@ -28,6 +28,8 @@ Before any grouping can happen, the raw data needs to be made arithmetically usa
 
 French accounting notation uses commas as both thousands separators and decimal separators depending on context. The parser disambiguates by examining the structure of the number: if multiple commas are present and all segments after the first contain exactly three digits, all commas are thousands separators and the number is read as a whole integer value — for example "1,135,000" becomes 1135000. If a single comma is present and the segment after it contains exactly three digits, it is also a thousands separator — "127,119" becomes 127119. If a single comma is present and the segment after it does not contain exactly three digits, it is a decimal separator — "127,50" becomes 127.5. Negative values written with a leading minus sign and a space such as "- 101,695" are also handled. Any line where both debit and credit are zero or missing after parsing is flagged immediately since it carries no accounting information and cannot participate in any balance calculation.
 
+The date field is normalized the same way, regardless of which of several shapes the source used: the ddmmyy convention ("020126"), a native Excel date cell, an ISO-style "yyyy-mm-dd", or dd/mm/yyyy already but inconsistently zero-padded. All of these become a single canonical dd/mm/yyyy before any other step runs, so date-bucketing in Step 2 and the date shown in the final output are always one consistent format regardless of source. A date in an unrecognized shape is left exactly as written rather than guessed at.
+
 ---
 
 **Step 2 — Group by date**
@@ -110,7 +112,13 @@ Entries resolved by the sweep with all lines consecutive in the original file an
 
 **Step 8c — Produce the output**
 
-Confirmed entries are written to the output — a CSV file, or the corresponding sheet of an output Excel workbook when the input was one sheet of a multi-sheet workbook — in the order their first line appeared in the original input. For each entry the first line carries all fields in full — Journal, Date, Code, Communication, Partner, Debit, Credit — plus the Confidence Score and an empty Flag Reason column. All subsequent lines of the same entry leave the Journal and Date fields blank, making it visually clear where each entry starts and ends. A blank separator row is inserted between entries. A flagged section at the bottom lists all unresolved lines with their reason code and a confidence score of 0. For a multi-sheet workbook, each output sheet is self-contained — its own confirmed entries and its own flagged section — exactly as if that sheet's journal had been processed on its own.
+The output uses a fixed column layout, independent of however the source file named or ordered its own columns: Journal, Date, Référence, Ecritures comptables / Compte, Ecritures comptables / Libellés, Ecritures comptables / partenaire, Ecritures comptables /Debit, Ecritures comptables /Credit, Confidence Score, Flag Reason — followed by any source columns that aren't one of the seven fields the algorithm recognizes, carried through unchanged and appended at the end in their original order.
+
+Confirmed entries are written in the order their first line appeared in the original input. For each entry the first line carries Journal and Date in full, plus a Référence value of "IMPORT MOUVEMENT"; all subsequent lines of the same entry leave Journal, Date, and Référence blank, making it visually clear where each entry starts and ends. A blank separator row is inserted between entries.
+
+A flagged section at the bottom lists every unresolved line, each with its reason and a confidence score of 0, in original file order (sorted by the line's position in the source, not by reason or date) — since flagged lines accumulate out of file order internally (zero-amount flags happen first across the whole file, then per-date-bucket flags, then orphans last), this final sort restores the order a human reviewer would expect when scanning the source for patterns. Because a flagged line is never part of a multi-line group, it carries Journal, Date, and Référence in full on every row, unlike a confirmed entry's continuation lines.
+
+For a multi-sheet workbook, each output sheet is self-contained — its own confirmed entries and its own flagged section — exactly as if that sheet's journal had been processed on its own. In the Excel output specifically, every column is also resized to fit its longest actual value, with no upper limit, so long text isn't cut off.
 
 ---
 

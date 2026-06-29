@@ -60,7 +60,7 @@ def load_clients(filepath: str) -> set[str]:
 
 
 def write_missing_clients(filepath: str, issues: dict) -> None:
-    fieldnames = ["Partenaire", "Occurrences", "Status", "Suggested match"]
+    fieldnames = ["Partenaire", "Occurrences", "Statut", "Client suggéré"]
     with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=CSV_DELIMITER)
         writer.writeheader()
@@ -68,8 +68,8 @@ def write_missing_clients(filepath: str, issues: dict) -> None:
             writer.writerow({
                 "Partenaire": name,
                 "Occurrences": count,
-                "Status": "Possible typo — please verify" if status == core.REASON_PARTNER_TYPO else "Unknown",
-                "Suggested match": best_match,
+                "Statut": "Probable faute de frappe — vérifiez avec le client suggéré" if status == core.REASON_PARTNER_TYPO else "Client inconnu — à créer ou à corriger",
+                "Client suggéré": best_match,
             })
 
 

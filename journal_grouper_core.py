@@ -95,25 +95,11 @@ MAX_SPLIT_SIZE = 20
 MAX_SPLIT_DEPTH = 10
 
 # Flag reasons
-REASON_ZERO_AMOUNT     = "Zero or missing amount on both debit and credit"
-REASON_INCOMPLETE      = "Incomplete entry — no matching line found to balance"
-REASON_AMBIGUOUS_STRAY = "Ambiguous stray — multiple candidates found, none clearly better"
-REASON_AMBIGUOUS_SPLIT = "Ambiguous split — multiple entries on same date cannot be cleanly separated"
-REASON_ORPHAN          = "Orphaned line — not assigned to any group"
-
-# Priority levels
-PRIORITY_HIGH   = "HIGH   — Entry incomplete, no candidate found anywhere in file"
-PRIORITY_MEDIUM = "MEDIUM — Ambiguous stray, multiple candidates equally plausible"
-PRIORITY_LOW    = "LOW    — Data quality issue (zero amount)"
-PRIORITY_INFO   = "INFO   — Orphaned line, may be related to another flagged entry"
-
-PRIORITY_MAP = {
-    REASON_INCOMPLETE:      PRIORITY_HIGH,
-    REASON_AMBIGUOUS_STRAY: PRIORITY_MEDIUM,
-    REASON_AMBIGUOUS_SPLIT: PRIORITY_MEDIUM,
-    REASON_ZERO_AMOUNT:     PRIORITY_LOW,
-    REASON_ORPHAN:          PRIORITY_INFO,
-}
+REASON_ZERO_AMOUNT     = "Montant manquant — cette ligne n'a ni débit ni crédit. Ajoutez le montant manquant dans le fichier source."
+REASON_INCOMPLETE      = "Ligne sans correspondance — aucune autre ligne n'a pu être trouvée pour que les débits et crédits s'équilibrent. Vérifiez si une ligne est manquante ou si un montant est incorrect."
+REASON_AMBIGUOUS_STRAY = "Correspondance incertaine — plusieurs lignes pourraient s'associer à celle-ci, mais aucune ne s'impose clairement. Choisissez manuellement la bonne ligne à associer."
+REASON_AMBIGUOUS_SPLIT = "Regroupement impossible — les lignes à cette date peuvent être combinées de plusieurs façons différentes sans qu'une solution soit évidente. Vérifiez manuellement quelles lignes vont ensemble."
+REASON_ORPHAN          = "Ligne orpheline — cette ligne n'a pu être rattachée à aucune écriture. Vérifiez si elle appartient à une écriture existante ou si une ligne de contrepartie est manquante."
 
 
 # ---------------------------------------------------------------------------
@@ -826,25 +812,16 @@ def compute_confidence(group, resolution, stray_count, stray_crossdate):
 
 
 # ---------------------------------------------------------------------------
-# Step 8c — Assign review priority to flagged rows
+# Step 8c — Order flagged rows
 # ---------------------------------------------------------------------------
 
-def assign_priorities(flagged_rows):
-    for row in flagged_rows:
-        reason = row.get("_flag_reason", "")
-        row["_priority"] = PRIORITY_MAP.get(reason, PRIORITY_INFO)
-
-    priority_order = {
-        PRIORITY_HIGH:   0,
-        PRIORITY_MEDIUM: 1,
-        PRIORITY_LOW:    2,
-        PRIORITY_INFO:   3,
-    }
-    flagged_rows.sort(key=lambda r: (
-        priority_order.get(r["_priority"], 99),
-        r.get(COL_DATE, "") if isinstance(r.get(COL_DATE, ""), str) else str(r.get(COL_DATE, "")),
-        r["_idx"],
-    ))
+def sort_flagged_rows(flagged_rows):
+    """Flagged rows accumulate out of original file order — zero-amount
+    flags happen first across the whole file, then per-date-bucket flags in
+    bucket-iteration order, then orphans last. Sorting strictly by _idx
+    restores original file order, which makes it easier for a human
+    reviewer to spot patterns in the source data."""
+    flagged_rows.sort(key=lambda r: r["_idx"])
     return flagged_rows
 
 
@@ -925,7 +902,7 @@ def process_and_report(rows, label=None, log=print):
         log(f"{prefix}  ✓ Debit totals   : input and output match")
         log(f"{prefix}  ✓ Credit totals  : input and output match")
 
-    all_flagged = assign_priorities(all_flagged)
+    all_flagged = sort_flagged_rows(all_flagged)
 
     return all_confirmed, all_flagged, all_resolution, errors
 

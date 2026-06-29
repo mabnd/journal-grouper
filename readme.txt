@@ -105,11 +105,18 @@ input sheet — with two parts in each:
   hunting score progressively lower.
 
 - A flagged section — every line the algorithm couldn't resolve with
-  confidence, each with a plain-language reason and a score of 0.
+  confidence, each with a plain-language reason and a score of 0, listed in
+  the same order they appeared in the original file so patterns are easy
+  to spot.
 
 And underlying both: a guarantee, checked on every run for every journal,
 that the number of lines and the total debit/credit amounts going in exactly
 match what comes out.
+
+The output columns are renamed and reordered to a fixed layout (matching
+an accounting import template) rather than just mirroring whatever the
+source file called its own columns, and dates are always shown as
+dd/mm/yyyy no matter what format the source used.
 
 Optionally, you can also give it a clients list to check the Partenaire
 values against — see "How to run it" below.

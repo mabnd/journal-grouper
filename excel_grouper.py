@@ -141,10 +141,10 @@ def write_sheet(ws_out, confirmed_groups, flagged_rows, fieldnames, resolution_m
 
 def write_missing_clients_sheet(wb_out, issues_by_sheet: dict) -> None:
     ws = wb_out.create_sheet(title="Missing Clients")
-    ws.append(["Sheet", "Partenaire", "Occurrences", "Status", "Suggested match"])
+    ws.append(["Feuille", "Partenaire", "Occurrences", "Statut", "Client suggéré"])
     for sheet_name, issues in issues_by_sheet.items():
         for name, (count, status, best_match) in sorted(issues.items()):
-            status_text = "Possible typo — please verify" if status == core.REASON_PARTNER_TYPO else "Unknown"
+            status_text = "Probable faute de frappe — vérifiez avec le client suggéré" if status == core.REASON_PARTNER_TYPO else "Client inconnu — à créer ou à corriger"
             ws.append([sheet_name, name, count, status_text, best_match])
     autosize_columns(ws)
 
