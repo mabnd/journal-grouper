@@ -67,6 +67,14 @@ COL_CREDIT  = "Crédit"
 REQUIRED_COLUMNS = [COL_DATE, COL_COMM, COL_PARTNER, COL_DEBIT, COL_CREDIT]
 
 
+def normalize_fieldnames(fieldnames: list[str]) -> list[str]:
+    """Replaces each fieldname with its canonical form if it matches a known
+    column name case-insensitively, leaving unrecognized names unchanged."""
+    known = {COL_JOURNAL, COL_CODE, COL_DATE, COL_COMM, COL_PARTNER, COL_DEBIT, COL_CREDIT}
+    canonical = {col.casefold(): col for col in known}
+    return [canonical.get(f.casefold(), f) for f in fieldnames]
+
+
 def validate_required_columns(fieldnames) -> list[str]:
     """Returns the subset of REQUIRED_COLUMNS missing from `fieldnames`,
     preserving REQUIRED_COLUMNS order. Empty list means all present."""

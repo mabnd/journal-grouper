@@ -73,7 +73,7 @@ def read_sheet(ws, sheet_name: str) -> tuple[list[dict], list[str]]:
     )
     header_raw = header_raw[:last_real + 1]
     ncols = len(header_raw)
-    fieldnames = [cell_to_text(h) for h in header_raw]
+    fieldnames = core.normalize_fieldnames([cell_to_text(h) for h in header_raw])
 
     # If the sheet has no Journal column, the sheet name *is* the journal —
     # add the column ourselves rather than treating every row as missing it.

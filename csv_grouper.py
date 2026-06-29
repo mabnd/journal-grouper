@@ -33,9 +33,11 @@ def parse_csv(filepath: str) -> tuple[list[dict], list[str]]:
     rows = []
     with open(filepath, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f, delimiter=CSV_DELIMITER)
-        fieldnames = [h.strip() for h in (reader.fieldnames or [])]
+        fieldnames_raw = [h.strip() for h in (reader.fieldnames or [])]
+        fieldnames = core.normalize_fieldnames(fieldnames_raw)
+        field_map = dict(zip(fieldnames_raw, fieldnames))
         for i, row in enumerate(reader):
-            cleaned = {k.strip(): (v.strip() if v else "") for k, v in row.items()}
+            cleaned = {field_map.get(k.strip(), k.strip()): (v.strip() if v else "") for k, v in row.items()}
             cleaned[core.COL_DATE]  = core.normalize_date(cleaned.get(core.COL_DATE, ""))
             cleaned["_idx"]        = i
             cleaned["_debit_val"]  = core.parse_amount(cleaned.get(core.COL_DEBIT,  ""))
