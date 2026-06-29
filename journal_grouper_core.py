@@ -63,8 +63,10 @@ COL_CREDIT  = "Crédit"
 # blank "match" every other blank, merging unrelated entries with full
 # confidence). COL_JOURNAL is deliberately excluded: a missing Journal column
 # is a supported case, handled by falling back to the sheet name. COL_CODE
-# is excluded too since it's pure passthrough, never read by the algorithm.
-REQUIRED_COLUMNS = [COL_DATE, COL_COMM, COL_PARTNER, COL_DEBIT, COL_CREDIT]
+# and COL_PARTNER are excluded too: both are pure passthrough, never read by
+# the grouping logic (the partner check handles a missing partner column
+# gracefully by simply finding nothing to report).
+REQUIRED_COLUMNS = [COL_DATE, COL_COMM, COL_DEBIT, COL_CREDIT]
 
 
 def normalize_fieldnames(fieldnames: list[str]) -> list[str]:
