@@ -156,10 +156,12 @@ as an extra sheet for Excel input. The report tells apart names that look
 like a typo of a known client (with a suggested match to verify) from
 names with no close match at all.
 
-Both scripts expect the Date de facturation, Communication, Partenaire,
-Débit, and Crédit columns to be present (under those exact names) — these
-are what the grouping logic actually reads. If a CSV is missing one, the
-run stops before writing anything, so you don't get a wrong result by
-mistake. If an Excel sheet is missing one, only that sheet is skipped (with
-a clear note in its place) — the rest of the workbook still processes
-normally.
+Both scripts require the Date de facturation, Communication, Débit, and
+Crédit columns to be present — these are what the grouping logic actually
+reads. Column names are matched case-insensitively, so "Débit" and "DÉBIT"
+are both accepted. Partenaire and Code are optional: if absent the
+corresponding output fields are simply left blank. If a CSV is missing a
+required column, the run stops before writing anything, so you don't get a
+wrong result by mistake. If an Excel sheet is missing one, only that sheet
+is skipped (with a clear note in its place) — the rest of the workbook
+still processes normally.
