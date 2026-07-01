@@ -113,13 +113,13 @@ And underlying both: a guarantee, checked on every run for every journal,
 that the number of lines and the total debit/credit amounts going in exactly
 match what comes out.
 
-The output columns are renamed and reordered to a fixed layout (matching
-an accounting import template) rather than just mirroring whatever the
-source file called its own columns, and dates are always shown as
-dd/mm/yyyy no matter what format the source used.
+The output columns are renamed according to OUTPUT_COLUMN_NAMES in
+config.py, so the output can be directly imported into your target system
+without further renaming. Dates are always normalised to dd/mm/yyyy
+regardless of the format the source used.
 
-Optionally, you can also give it a clients list to check the Partenaire
-values against — see "How to run it" below.
+Optionally, you can also give it a clients list to check the partner
+column values against — see "How to run it" below.
 
 One thing worth knowing: some journals close out many small expense lines
 recorded on different days with a single summary line much later (a
@@ -131,11 +131,42 @@ treated as a known limitation rather than something the algorithm tries to
 work around automatically.
 
 
+Configuration
+========================
+
+Open config.py — that is the only file you need to edit. It has four
+sections:
+
+  Input column names
+    Map each algorithm role to the column header as it appears in your
+    input file. The four required roles are date, communication, debit,
+    credit. Three optional roles (journal, code, partner) are handled
+    gracefully if absent.
+
+  Output column names
+    A dictionary mapping each input column name to whatever you want it
+    called in the output. Any column not listed keeps its original name.
+    You can add entries for extra passthrough columns from your file too.
+
+  User-facing strings
+    The text that appears in the FLAG_REASON column and in the
+    missing-client report. Translate or rewrite to match your language.
+
+  Algorithm tuning
+    Six numeric thresholds controlling how aggressively lines are grouped.
+    The defaults work well for standard accounting exports — only adjust
+    these if the tool is consistently over- or under-grouping your data.
+
+
 How to run it
 ========================
 
 There are two scripts, one per input format. Both produce the same kind of
 output and use the exact same grouping logic underneath.
+
+Install the one dependency first:
+
+    pip install -r requirements.txt
 
 For a single journal in a CSV file:
 
@@ -147,21 +178,19 @@ For a workbook with multiple journals, one per sheet:
 
 The output is written next to the input automatically (input.csv produces
 input_processed.csv, and likewise for Excel) — no need to name it yourself.
-If a sheet in the Excel workbook has no "Journal" column, the sheet's own
+If a sheet in the Excel workbook has no journal column, the sheet's own
 name is used as the journal name automatically.
 
-The clients.csv argument is optional. If given, partner names that don't
+The clients.csv argument is optional. If given, partner values that don't
 appear in it are reported separately — as a second file for CSV input, or
 as an extra sheet for Excel input. The report tells apart names that look
 like a typo of a known client (with a suggested match to verify) from
 names with no close match at all.
 
-Both scripts require the Date de facturation, Communication, Débit, and
-Crédit columns to be present — these are what the grouping logic actually
-reads. Column names are matched case-insensitively, so "Débit" and "DÉBIT"
-are both accepted. Partenaire and Code are optional: if absent the
-corresponding output fields are simply left blank. If a CSV is missing a
-required column, the run stops before writing anything, so you don't get a
-wrong result by mistake. If an Excel sheet is missing one, only that sheet
-is skipped (with a clear note in its place) — the rest of the workbook
-still processes normally.
+Both scripts require the four columns configured as date, communication,
+debit, and credit in config.py to be present. Column names are matched
+case-insensitively. The journal, code, and partner columns are optional:
+if absent the corresponding output fields are simply left blank. If a CSV
+is missing a required column, the run stops before writing anything. If an
+Excel sheet is missing one, only that sheet is skipped (with a clear note
+in its place) — the rest of the workbook still processes normally.

@@ -2,10 +2,8 @@
 excel_grouper.py
 ================
 Excel entry point for the journal-entry grouping algorithm. Each worksheet
-in the input workbook is treated as one independent journal — same columns
-as the CSV format (Journal, Code, Date de facturation, Communication,
-Partenaire, Débit, Crédit), just one sheet per journal instead of one file
-per journal.
+in the input workbook is treated as one independent journal. The expected
+input column names are defined in config.py (INPUT_COLUMNS).
 
 All algorithm logic lives in journal_grouper_core.py — this file only
 handles reading workbook sheets into row dicts and writing the result back
@@ -18,8 +16,8 @@ Usage:
     python excel_grouper.py input.xlsx [clients.csv]
 
 The output is written next to the input as <input>_processed.xlsx. If a
-clients list is given (and exists), an extra "Missing Clients" sheet is
-appended listing Partenaire values not found in it, per source sheet.
+clients list is given (and exists), an extra sheet is appended listing
+partner values not found in it, per source sheet.
 """
 
 import os
@@ -30,6 +28,7 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 
 import journal_grouper_core as core
+import config
 from csv_grouper import derive_path, load_clients
 
 # Column-width floor for autosize_columns(), in Excel's character units —
@@ -49,9 +48,7 @@ def cell_to_text(value):
     if isinstance(value, bool):
         return str(value)
     if isinstance(value, datetime.date):
-        # Matches the ddmmyy text convention used in the CSV journals
-        # (e.g. "020126" for 2026-01-02).
-        return value.strftime("%d%m%y")
+        return value.strftime(config.DATE_FORMAT)
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
@@ -140,11 +137,17 @@ def write_sheet(ws_out, confirmed_groups, flagged_rows, fieldnames, resolution_m
 
 
 def write_missing_clients_sheet(wb_out, issues_by_sheet: dict) -> None:
-    ws = wb_out.create_sheet(title="Missing Clients")
-    ws.append(["Feuille", "Partenaire", "Occurrences", "Statut", "Client suggéré"])
+    ws = wb_out.create_sheet(title=config.MISSING_CLIENT_SHEET_NAME)
+    ws.append([
+        config.MISSING_CLIENT_COL_SHEET,
+        config.MISSING_CLIENT_COL_PARTNER,
+        config.MISSING_CLIENT_COL_OCCURRENCES,
+        config.MISSING_CLIENT_COL_STATUS,
+        config.MISSING_CLIENT_COL_SUGGESTION,
+    ])
     for sheet_name, issues in issues_by_sheet.items():
         for name, (count, status, best_match) in sorted(issues.items()):
-            status_text = "Probable faute de frappe — vérifiez avec le client suggéré" if status == core.REASON_PARTNER_TYPO else "Client inconnu — à créer ou à corriger"
+            status_text = config.MISSING_CLIENT_STATUS_TYPO if status == core.REASON_PARTNER_TYPO else config.MISSING_CLIENT_STATUS_UNKNOWN
             ws.append([sheet_name, name, count, status_text, best_match])
     autosize_columns(ws)
 
@@ -224,7 +227,7 @@ def run(input_path, clients_path=None):
             print(
                 f"  Partner issues          : {total_issues} "
                 f"({total_typos} possible typo(s), {total_issues - total_typos} unknown) "
-                f"— see 'Missing Clients' sheet"
+                f"— see '{config.MISSING_CLIENT_SHEET_NAME}' sheet"
             )
         else:
             print("  Partner issues          : none, all partners found in clients list")

@@ -44,18 +44,20 @@ from itertools import combinations
 from difflib import SequenceMatcher
 from collections import Counter
 
+import config
+
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Configuration — derived from config.py
 # ---------------------------------------------------------------------------
 
-COL_JOURNAL = "Journal"
-COL_CODE    = "Code"
-COL_DATE    = "Date de facturation"
-COL_COMM    = "Communication"
-COL_PARTNER = "Partenaire"
-COL_DEBIT   = "Débit"
-COL_CREDIT  = "Crédit"
+COL_DATE    = config.INPUT_COLUMNS["date"]
+COL_COMM    = config.INPUT_COLUMNS["communication"]
+COL_DEBIT   = config.INPUT_COLUMNS["debit"]
+COL_CREDIT  = config.INPUT_COLUMNS["credit"]
+COL_JOURNAL = config.INPUT_COLUMNS.get("journal", "Journal")
+COL_CODE    = config.INPUT_COLUMNS.get("code", "Code")
+COL_PARTNER = config.INPUT_COLUMNS.get("partner", "Partenaire")
 
 # Columns the algorithm actually depends on. Missing any of these doesn't
 # raise an error on its own — every lookup falls back to "" or 0.0 — but it
@@ -84,32 +86,18 @@ def validate_required_columns(fieldnames) -> list[str]:
     return [col for col in REQUIRED_COLUMNS if col not in present]
 
 
-# A balanced group is only kept open if the next line's communication
-# is at or above this similarity — otherwise it is closed and a new group starts.
-FUZZY_MERGE_THRESHOLD = 0.95
+FUZZY_MERGE_THRESHOLD   = config.FUZZY_MERGE_THRESHOLD
+STRAY_CONFIDENCE_MARGIN = config.STRAY_CONFIDENCE_MARGIN
+BALANCE_TOLERANCE       = config.BALANCE_TOLERANCE
+MAX_SUBSET_SUM_STATES   = config.MAX_SUBSET_SUM_STATES
+MAX_SPLIT_SIZE          = config.MAX_SPLIT_SIZE
+MAX_SPLIT_DEPTH         = config.MAX_SPLIT_DEPTH
 
-# Stray-line hunting: top candidate must beat second by this margin to win.
-STRAY_CONFIDENCE_MARGIN = 0.20
-
-# Rounding tolerance for balance checks
-BALANCE_TOLERANCE = 0.01
-
-# Step 5a Pass 2 subset-sum DP guard — bounds the number of distinct partial
-# sums tracked, not the line count, so it stays safe even on large groups.
-MAX_SUBSET_SUM_STATES = 200_000
-
-# Step 6 recursive split guard (spec: capped at 20 lines)
-MAX_SPLIT_SIZE = 20
-
-# Recursive split depth guard
-MAX_SPLIT_DEPTH = 10
-
-# Flag reasons
-REASON_ZERO_AMOUNT     = "Montant manquant — cette ligne n'a ni débit ni crédit. Ajoutez le montant manquant dans le fichier source."
-REASON_INCOMPLETE      = "Ligne sans correspondance — aucune autre ligne n'a pu être trouvée pour que les débits et crédits s'équilibrent. Vérifiez si une ligne est manquante ou si un montant est incorrect."
-REASON_AMBIGUOUS_STRAY = "Correspondance incertaine — plusieurs lignes pourraient s'associer à celle-ci, mais aucune ne s'impose clairement. Choisissez manuellement la bonne ligne à associer."
-REASON_AMBIGUOUS_SPLIT = "Regroupement impossible — les lignes à cette date peuvent être combinées de plusieurs façons différentes sans qu'une solution soit évidente. Vérifiez manuellement quelles lignes vont ensemble."
-REASON_ORPHAN          = "Ligne orpheline — cette ligne n'a pu être rattachée à aucune écriture. Vérifiez si elle appartient à une écriture existante ou si une ligne de contrepartie est manquante."
+REASON_ZERO_AMOUNT     = config.REASON_ZERO_AMOUNT
+REASON_INCOMPLETE      = config.REASON_INCOMPLETE
+REASON_AMBIGUOUS_STRAY = config.REASON_AMBIGUOUS_STRAY
+REASON_AMBIGUOUS_SPLIT = config.REASON_AMBIGUOUS_SPLIT
+REASON_ORPHAN          = config.REASON_ORPHAN
 
 
 # ---------------------------------------------------------------------------
@@ -198,9 +186,9 @@ def flag_zero_amount_lines(rows):
 # ---------------------------------------------------------------------------
 
 def forward_fill_dates(rows):
-    """Some exports leave Date de facturation blank on every line of an
-    entry after its first — a flattened merged-cell convention, since all
-    lines of one entry visually share the same date. Bucketing strictly by
+    """Some exports leave the date column blank on every line of an entry
+    after its first — a flattened merged-cell convention, since all lines
+    of one entry visually share the same date. Bucketing strictly by
     the literal value (below) would otherwise split such an entry's own
     lines into two buckets — its first line under the real date, the rest
     under "" — breaking balancing entirely. This fills each blank date with
@@ -648,7 +636,7 @@ def resolve_date_bucket(date_rows, global_pool):
 
 # How close an unmatched partner name must be to a known client name to be
 # reported as a probable typo instead of a flat unknown.
-PARTNER_TYPO_THRESHOLD = 0.85
+PARTNER_TYPO_THRESHOLD = config.PARTNER_TYPO_THRESHOLD
 
 REASON_PARTNER_TYPO    = "typo"
 REASON_PARTNER_UNKNOWN = "unknown"
@@ -927,48 +915,46 @@ def process_and_report(rows, label=None, log=print):
 #   ("blank", None)                  - a blank separator row
 #   ("header", text)                 - a section header (e.g. flagged banner)
 #
-# The output uses a fixed column layout matching an external import
-# template, independent of however the source file named/ordered its own
-# columns: Journal, Date, Référence, then the renamed core fields, then the
-# algorithm's own CONFIDENCE_SCORE/FLAG_REASON, then any columns from the
-# source that aren't one of the recognized core fields (carried through
-# unchanged, appended at the end, in their original order).
+# The output column names and order are driven by OUTPUT_COLUMN_NAMES in
+# config.py. Core columns appear first (renamed per that mapping), with the
+# reference column inserted after the date. The algorithm's own
+# CONFIDENCE_SCORE and FLAG_REASON follow. Any source columns not recognised
+# as core fields are carried through unchanged and appended at the end in
+# their original order (or renamed if listed in OUTPUT_COLUMN_NAMES).
 # ---------------------------------------------------------------------------
 
-OUTPUT_COL_DATE      = "Date"
-OUTPUT_COL_REFERENCE = "Référence"
-OUTPUT_COL_CODE       = "Ecritures comptables / Compte"
-OUTPUT_COL_COMM       = "Ecritures comptables / Libellés"
-OUTPUT_COL_PARTNER    = "Ecritures comptables / partenaire"
-OUTPUT_COL_DEBIT      = "Ecritures comptables /Debit"
-OUTPUT_COL_CREDIT     = "Ecritures comptables /Credit"
-REFERENCE_VALUE       = "IMPORT MOUVEMENT"
+_CORE_INPUT_COLUMNS = set(config.INPUT_COLUMNS.values())
 
-_CORE_INPUT_COLUMNS = {COL_JOURNAL, COL_CODE, COL_DATE, COL_COMM, COL_PARTNER, COL_DEBIT, COL_CREDIT}
+# Defined output order for the known core columns (before rename).
+_CORE_OUTPUT_ORDER = [COL_JOURNAL, COL_DATE, COL_CODE, COL_COMM, COL_PARTNER, COL_DEBIT, COL_CREDIT]
 
 
 def generate_output_rows(confirmed_groups, flagged_rows, fieldnames, resolution_meta):
+    rename = config.OUTPUT_COLUMN_NAMES
     extra_fields = [f for f in fieldnames if f not in _CORE_INPUT_COLUMNS]
-    output_fields = [
-        COL_JOURNAL, OUTPUT_COL_DATE, OUTPUT_COL_REFERENCE,
-        OUTPUT_COL_CODE, OUTPUT_COL_COMM, OUTPUT_COL_PARTNER,
-        OUTPUT_COL_DEBIT, OUTPUT_COL_CREDIT,
-        "CONFIDENCE_SCORE", "FLAG_REASON",
-    ] + extra_fields
+
+    # Build the output field list: core columns (renamed) with the reference
+    # column inserted after the date, then extra passthrough columns (renamed
+    # if listed in OUTPUT_COLUMN_NAMES), then the algorithm's own columns.
+    output_fields = []
+    for col in _CORE_OUTPUT_ORDER:
+        output_fields.append(rename.get(col, col))
+        if col == COL_DATE:
+            output_fields.append(config.REFERENCE_COLUMN_NAME)
+    for col in extra_fields:
+        output_fields.append(rename.get(col, col))
+    output_fields += ["CONFIDENCE_SCORE", "FLAG_REASON"]
     yield ("fields", output_fields)
 
     def build_row(row, journal_val, date_val):
         out_row = {k: "" for k in output_fields}
-        out_row[COL_JOURNAL]          = journal_val
-        out_row[OUTPUT_COL_DATE]      = date_val
-        out_row[OUTPUT_COL_REFERENCE] = REFERENCE_VALUE if journal_val and date_val else ""
-        out_row[OUTPUT_COL_CODE]      = row.get(COL_CODE, "")
-        out_row[OUTPUT_COL_COMM]      = row.get(COL_COMM, "")
-        out_row[OUTPUT_COL_PARTNER]   = row.get(COL_PARTNER, "")
-        out_row[OUTPUT_COL_DEBIT]     = row.get(COL_DEBIT, "")
-        out_row[OUTPUT_COL_CREDIT]    = row.get(COL_CREDIT, "")
+        out_row[rename.get(COL_JOURNAL, COL_JOURNAL)] = journal_val
+        out_row[rename.get(COL_DATE, COL_DATE)]       = date_val
+        out_row[config.REFERENCE_COLUMN_NAME]          = config.REFERENCE_VALUE if journal_val and date_val else ""
+        for col in [COL_CODE, COL_COMM, COL_PARTNER, COL_DEBIT, COL_CREDIT]:
+            out_row[rename.get(col, col)] = row.get(col, "")
         for f in extra_fields:
-            out_row[f] = row.get(f, "")
+            out_row[rename.get(f, f)] = row.get(f, "")
         return out_row
 
     confirmed_sorted = sorted(confirmed_groups, key=lambda g: g[0]["_idx"])

@@ -14,7 +14,7 @@ Usage:
     python csv_grouper.py input.csv [clients.csv]
 
 The output is written next to the input as <input>_processed.csv. If a
-clients list is given (and exists), Partenaire values not found in it are
+clients list is given (and exists), partner values not found in it are
 written to <input>_missing_clients.csv.
 """
 
@@ -23,15 +23,16 @@ import os
 import sys
 
 import journal_grouper_core as core
+import config
 
 
-CSV_DELIMITER = ","
-CLIENT_NAME_COLUMN = "Nom complet"
+CSV_DELIMITER      = config.CSV_DELIMITER
+CLIENT_NAME_COLUMN = config.CLIENT_NAME_COLUMN
 
 
 def parse_csv(filepath: str) -> tuple[list[dict], list[str]]:
     rows = []
-    with open(filepath, newline="", encoding="utf-8-sig") as f:
+    with open(filepath, newline="", encoding=config.CSV_ENCODING) as f:
         reader = csv.DictReader(f, delimiter=CSV_DELIMITER)
         fieldnames_raw = [h.strip() for h in (reader.fieldnames or [])]
         fieldnames = core.normalize_fieldnames(fieldnames_raw)
@@ -52,7 +53,7 @@ def derive_path(input_path: str, suffix: str) -> str:
 
 
 def load_clients(filepath: str) -> set[str]:
-    with open(filepath, newline="", encoding="utf-8-sig") as f:
+    with open(filepath, newline="", encoding=config.CSV_ENCODING) as f:
         reader = csv.DictReader(f, delimiter=CSV_DELIMITER)
         return {
             row.get(CLIENT_NAME_COLUMN, "").strip()
@@ -62,21 +63,26 @@ def load_clients(filepath: str) -> set[str]:
 
 
 def write_missing_clients(filepath: str, issues: dict) -> None:
-    fieldnames = ["Partenaire", "Occurrences", "Statut", "Client suggéré"]
-    with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=CSV_DELIMITER)
+    cols = [
+        config.MISSING_CLIENT_COL_PARTNER,
+        config.MISSING_CLIENT_COL_OCCURRENCES,
+        config.MISSING_CLIENT_COL_STATUS,
+        config.MISSING_CLIENT_COL_SUGGESTION,
+    ]
+    with open(filepath, "w", newline="", encoding=config.CSV_ENCODING) as f:
+        writer = csv.DictWriter(f, fieldnames=cols, delimiter=CSV_DELIMITER)
         writer.writeheader()
         for name, (count, status, best_match) in sorted(issues.items()):
             writer.writerow({
-                "Partenaire": name,
-                "Occurrences": count,
-                "Statut": "Probable faute de frappe — vérifiez avec le client suggéré" if status == core.REASON_PARTNER_TYPO else "Client inconnu — à créer ou à corriger",
-                "Client suggéré": best_match,
+                config.MISSING_CLIENT_COL_PARTNER:     name,
+                config.MISSING_CLIENT_COL_OCCURRENCES: count,
+                config.MISSING_CLIENT_COL_STATUS:      config.MISSING_CLIENT_STATUS_TYPO if status == core.REASON_PARTNER_TYPO else config.MISSING_CLIENT_STATUS_UNKNOWN,
+                config.MISSING_CLIENT_COL_SUGGESTION:  best_match,
             })
 
 
 def write_output(filepath, confirmed_groups, flagged_rows, fieldnames, resolution_meta):
-    with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
+    with open(filepath, "w", newline="", encoding=config.CSV_ENCODING) as f:
         writer = None
         for event, payload in core.generate_output_rows(
             confirmed_groups, flagged_rows, fieldnames, resolution_meta
@@ -93,7 +99,7 @@ def write_output(filepath, confirmed_groups, flagged_rows, fieldnames, resolutio
                 writer.writerow({k: "" for k in writer.fieldnames})
             elif event == "header":
                 sep = {k: "" for k in writer.fieldnames}
-                sep[core.COL_JOURNAL] = payload
+                sep[writer.fieldnames[0]] = payload
                 writer.writerow(sep)
 
 
