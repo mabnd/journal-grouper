@@ -40,11 +40,9 @@ A processed file (same name, `_processed` suffix) with:
 - **Confirmed entries** — grouped lines, each with a confidence score showing how certain the grouping is
 - **Flagged rows** — lines that couldn't be grouped automatically, with a reason for manual review
 
-Optionally, if you provide a clients list, partner names not found in it are reported separately.
-
 ## Configuration
 
-Edit `config.py` — the only file you need to touch:
+Edit [`config.py`](config.py) — the only file you need to touch:
 
 | Section | What to set |
 |---|---|
@@ -58,8 +56,8 @@ Edit `config.py` — the only file you need to touch:
 ```
 pip install -r requirements.txt
 
-python csv_grouper.py   input.csv   [clients.csv]
-python excel_grouper.py input.xlsx  [clients.csv]
+python csv_grouper.py   input.csv   [clients.csv]   # clients.csv is optional
+python excel_grouper.py input.xlsx  [clients.csv]   # clients.csv is optional
 ```
 
 See [algorithm.md](algorithm.md) for a full description of how it works.

@@ -104,6 +104,11 @@ def write_output(filepath, confirmed_groups, flagged_rows, fieldnames, resolutio
 
 
 def run(input_path, clients_path=None):
+    ext = os.path.splitext(input_path)[1].lower()
+    if ext != ".csv":
+        print(f"Error: expected a .csv file, got '{ext or '(no extension)'}'")
+        sys.exit(1)
+
     print(f"Reading: {input_path}")
 
     rows, fieldnames = parse_csv(input_path)

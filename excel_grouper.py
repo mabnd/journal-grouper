@@ -152,6 +152,11 @@ def write_missing_clients_sheet(wb_out, issues_by_sheet: dict) -> None:
 
 
 def run(input_path, clients_path=None):
+    ext = os.path.splitext(input_path)[1].lower()
+    if ext not in (".xlsx", ".xlsm"):
+        print(f"Error: expected an Excel file (.xlsx or .xlsm), got '{ext or '(no extension)'}'")
+        sys.exit(1)
+
     print(f"Reading: {input_path}")
     wb_in = openpyxl.load_workbook(input_path, data_only=True, read_only=True)
 
