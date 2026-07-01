@@ -1,4 +1,6 @@
-**What the algorithm is trying to solve**
+# Algorithm
+
+## What it's trying to solve
 
 You have the accounting history of a single journal — either as a standalone CSV file, or as one sheet in a multi-sheet Excel workbook where each sheet is an independent journal. Either way, the algorithm below runs once per journal; a multi-sheet workbook is processed one sheet at a time, with no mixing of lines between sheets. Each journal is a flat list of individual lines, each representing one side of a financial transaction. These lines belong together in groups called journal entries, where the fundamental rule of double-entry bookkeeping requires that the total debits exactly equal the total credits within each entry. The file gives you no explicit marker to tell you where one entry ends and the next begins — all you have is a flat sequence of lines, each carrying an account code, a date, a communication description, an optional partner name, and either a debit or a credit amount.
 
@@ -6,23 +8,19 @@ In an ideal world the lines of each entry would always sit consecutively in the 
 
 The goal is to automatically reconstruct the correct groupings from this flat list, produce a clean output where each entry's lines are visually presented together with only the first line showing the journal and date, assign a confidence score to each confirmed grouping so a human reviewer knows where to focus their attention, and flag anything the algorithm could not resolve with enough certainty for manual review. A final verification step ensures that no data was lost or gained during the entire process — the number of lines in equals the number of lines out, always.
 
----
-
-**What the algorithm knows for certain**
+## What the algorithm knows for certain
 
 The only field that is guaranteed to be shared across all lines of the same entry is the date. The journal name is also the same but since the entire file represents one journal it adds no discriminating power. Everything else — the account code, communication, partner, and obviously the amounts — varies from line to line by design, since each line hits a different account. The one inviolable accounting rule is that debits equal credits within each entry. This is the strongest and most reliable signal available. Two lines being textually identical to each other carries no special meaning on its own — it is never treated as evidence that one of them is erroneous.
 
 ---
 
-**Step 0 — Validate required columns**
+## Step 0 — Validate required columns
 
-Before anything else, the header is checked for the four columns the algorithm actually depends on: the date, communication, debit, and credit columns (as configured in config.py's INPUT_COLUMNS). The journal column is exempt — a missing journal column is an intentionally supported case, see Step 8c — and the code and partner columns are exempt too: both are pure passthrough, never read by any grouping step, so a missing column simply produces no output for that field rather than a wrong result. Column names are matched case-insensitively. None of these lookups would raise an error on their own if a column were simply absent — every read falls back to an empty value — but that fallback can silently produce a wrong-but-plausible result rather than an obvious failure. The clearest case is Communication: with that column missing, every line's blank communication is treated as identical to every other blank one, so the balance-first sweep in Step 3 never finds a reason to close a group, and two genuinely unrelated entries on the same date can be merged into a single confirmed entry that even reports a perfect confidence score. This step exists specifically to catch that class of problem before it happens.
+Before anything else, the header is checked for the four columns the algorithm actually depends on: the date, communication, debit, and credit columns (as configured in config.py's `INPUT_COLUMNS`). The journal column is exempt — a missing journal column is an intentionally supported case, see Step 8c — and the code and partner columns are exempt too: both are pure passthrough, never read by any grouping step, so a missing column simply produces no output for that field rather than a wrong result. Column names are matched case-insensitively. None of these lookups would raise an error on their own if a column were simply absent — every read falls back to an empty value — but that fallback can silently produce a wrong-but-plausible result rather than an obvious failure. The clearest case is Communication: with that column missing, every line's blank communication is treated as identical to every other blank one, so the balance-first sweep in Step 3 never finds a reason to close a group, and two genuinely unrelated entries on the same date can be merged into a single confirmed entry that even reports a perfect confidence score. This step exists specifically to catch that class of problem before it happens.
 
 For a CSV journal, the whole run stops immediately if any required column is missing — no output file is written, only a message naming which column(s) are absent. For an Excel workbook, the check runs per sheet: a sheet missing a required column is skipped (a one-line marker naming the missing column(s) is written in its place) while every other sheet in the same workbook is still processed and written normally.
 
----
-
-**Step 1 — Parse and clean the input**
+## Step 1 — Parse and clean the input
 
 Before any grouping can happen, the raw data needs to be made arithmetically usable. This step reads the journal — a CSV file, or one sheet of an Excel workbook — strips whitespace from all column names and text values, and converts the debit and credit fields into actual floating point numbers the algorithm can perform arithmetic on. A CSV always stores these as French-formatted text; an Excel sheet may store them as native numbers already, or as the same French-formatted text, and both are handled.
 
@@ -30,17 +28,13 @@ French accounting notation uses commas as both thousands separators and decimal 
 
 The date field is normalized the same way, regardless of which of several shapes the source used: the ddmmyy convention ("020126"), a native Excel date cell, an ISO-style "yyyy-mm-dd", or dd/mm/yyyy already but inconsistently zero-padded. All of these become a single canonical dd/mm/yyyy before any other step runs, so date-bucketing in Step 2 and the date shown in the final output are always one consistent format regardless of source. A date in an unrecognized shape is left exactly as written rather than guessed at.
 
----
-
-**Step 2 — Group by date**
+## Step 2 — Group by date
 
 Since all lines of a journal entry always share the same date, the date is the first and hardest grouping key. Before bucketing, blank dates are forward-filled from the most recently seen non-blank date in file order: some exports only write the date on an entry's first line and leave it blank on the rest (a flattened merged-cell convention), and bucketing strictly by the literal value would otherwise split such an entry's own lines across two buckets — its first line under the real date, the rest under blank — breaking balance detection for that entry entirely. This step then partitions all remaining lines into date buckets, preserving the exact original file order within each bucket. All subsequent grouping steps work independently within each date bucket — lines from different dates are never grouped together except in the specific stray-line hunting step where a deliberately misplaced line may be retrieved from another date.
 
 Date buckets are resolved one at a time, and once a bucket's own lines have been confirmed or flagged, every one of them is permanently removed from the pool of lines any other date's stray-line search can draw from. This prevents the same physical line from ever being claimed by two different buckets — without it, a line that one date's bucket gives up on (flags as incomplete) could later be silently grabbed by a different date's stray search, making that one line appear in the output twice.
 
----
-
-**Step 3 — Propose initial groups using a balance-first sweep**
+## Step 3 — Propose initial groups using a balance-first sweep
 
 Within each date bucket the algorithm sweeps through lines in their original file order and proposes where one entry ends and the next begins. The governing rule has two parts.
 
@@ -50,9 +44,7 @@ If the running group is already balanced, the algorithm examines the communicati
 
 This makes balance the primary and dominant grouping signal, and communication similarity a last-resort tie-breaker only consulted when a group is already closed by the balance rule. This design correctly handles the SONATEL problem — where dozens of similar but distinct entries share a long common prefix — because each 3-line sub-entry balances independently and triggers its own closure before the next one starts.
 
----
-
-**Step 4 — Refine balanced groups with mixed communications**
+## Step 4 — Refine balanced groups with mixed communications
 
 The sweep can sometimes produce a balanced group whose lines contain clearly different communications. This happens when two or more consecutive entries happen to balance together as a whole even though they are distinct entries — their individual missing amounts cancel each other out.
 
@@ -60,17 +52,13 @@ This step examines each balanced group that has more than three lines and mixed 
 
 If no cleanly splitting clusters are found the group is confirmed as one entry as-is.
 
----
-
-**Step 5a — Extract balanced sub-groups from unbalanced groups**
+## Step 5a — Extract balanced sub-groups from unbalanced groups
 
 When the sweep produces an unbalanced group it is usually because one entry in the file is missing a line somewhere else, causing the sweep to keep absorbing subsequent complete entries into the growing group rather than starting new ones. Those subsequent entries may be perfectly balanced on their own but are trapped inside the unbalanced group.
 
 This step rescues them using two passes. Pass 1 is communication-guided and uses the same single-pass cluster builder described in Step 4 — it checks each communication cluster to see if it balances independently, extracts any that do, and repeats until no more can be extracted. This pass is fast and handles the common case of trapped entries with distinct communications. Pass 2 searches the remaining lines for any subset that balances, using a subset-sum search rather than enumerating every combination, so it stays fast without needing a small line-count cap. After both passes only the genuinely incomplete lines remain — the ones that truly are missing something from elsewhere in the file.
 
----
-
-**Step 5b — Hunt for stray lines**
+## Step 5b — Hunt for stray lines
 
 For each group that is still unbalanced after Step 5a, the algorithm calculates the missing amount — the difference between total debits and total credits — and searches the rest of the file for a combination of 1, 2, or 3 lines whose net amounts together cover that missing balance.
 
@@ -78,21 +66,15 @@ The search is made efficient by a pre-built amount index: a dictionary that maps
 
 When multiple matching combinations are found, they are ranked by average communication similarity to the group being resolved. If one combination scores more than 20 percentage points above the next best candidate it is selected automatically and the entry is confirmed. If multiple combinations are equally plausible the entry is flagged as ambiguous. If no combination is found at all the entry is flagged as incomplete.
 
----
-
-**Step 6 — Final recursive split attempt**
+## Step 6 — Final recursive split attempt
 
 If Step 5b could not resolve a group — either because it was flagged as ambiguous or because no stray was found — the algorithm makes one last attempt to split the group into as many independently balancing subsets as possible using a recursive combinatorial search. This search tries all possible ways to partition the group into two subsets that each balance, then recursively tries to split each subset further, always preferring the partition that produces the most sub-entries. Results are memoized by the frozenset of line indices to avoid recomputing the same balance sums multiple times. The search is capped at 20 lines to prevent exponential slowdown on very large groups. If a valid split is found all subsets are confirmed. If not the group is flagged for manual review.
 
----
-
-**Step 7 — Final conflict check**
+## Step 7 — Final conflict check
 
 A safety net that runs after all grouping is complete. Any line from the original input that ended up in neither a confirmed group nor the flagged list is marked as orphaned and added to the flagged section. This should never happen if the algorithm is correct, but it is checked explicitly to guarantee that no data slips through silently.
 
----
-
-**Step 8a — Verification**
+## Step 8a — Verification
 
 Before any output is written, four integrity checks are run against the original input to confirm that the processing was lossless and correct.
 
@@ -100,19 +82,15 @@ The first check confirms that the total number of lines in the output — confir
 
 If any check fails a clear error message is printed describing exactly what went wrong. If all four pass, four green confirmations are printed in the terminal.
 
----
-
-**Step 8b — Compute confidence scores**
+## Step 8b — Compute confidence scores
 
 Each confirmed entry receives a score from 0 to 100 reflecting how certain the algorithm is about the grouping. The score starts at 100 and points are deducted for each factor that reduces certainty.
 
 Entries resolved by the sweep with all lines consecutive in the original file and all lines sharing the same communication score 100. Deductions are applied as follows: requiring a split from a balanced group with mixed communications costs 10 points. Being rescued from inside a larger unbalanced group by the extraction step costs 15 points. Requiring stray line hunting costs 10 points as a base, plus an additional 10 points for each stray line required beyond the first, plus an additional 15 points if any stray line came from a different date bucket. Having mixed communications across the lines of the entry costs 10 points. Having non-consecutive original file indices across the lines of the entry costs 10 points. The minimum score is 0. Flagged rows receive a score of 0.
 
----
+## Step 8c — Produce the output
 
-**Step 8c — Produce the output**
-
-The output uses a column layout defined by OUTPUT_COLUMN_NAMES in config.py, independent of however the source file named or ordered its own columns. The seven recognised input columns are renamed according to that mapping; any source columns not listed there are carried through unchanged and appended at the end in their original order. A reference column (named and valued by REFERENCE_COLUMN_NAME and REFERENCE_VALUE in config.py) is inserted after the date column, followed by CONFIDENCE_SCORE and FLAG_REASON.
+The output uses a column layout defined by `OUTPUT_COLUMN_NAMES` in `config.py`, independent of however the source file named or ordered its own columns. The seven recognised input columns are renamed according to that mapping; any source columns not listed there are carried through unchanged and appended at the end in their original order. A reference column (named and valued by `REFERENCE_COLUMN_NAME` and `REFERENCE_VALUE` in `config.py`) is inserted after the date column, followed by `CONFIDENCE_SCORE` and `FLAG_REASON`.
 
 Confirmed entries are written in the order their first line appeared in the original input. For each entry the first line carries the journal, date, and reference value in full; all subsequent lines of the same entry leave those three fields blank, making it visually clear where each entry starts and ends. A blank separator row is inserted between entries.
 
@@ -120,11 +98,9 @@ A flagged section at the bottom lists every unresolved line, each with its reaso
 
 For a multi-sheet workbook, each output sheet is self-contained — its own confirmed entries and its own flagged section — exactly as if that sheet's journal had been processed on its own. In the Excel output specifically, every column is also resized to fit its longest actual value, with no upper limit, so long text isn't cut off.
 
----
+## Step 9 — Partner existence check (optional)
 
-**Step 9 — Partner existence check (optional)**
-
-If a clients list is supplied alongside the journal, an additional, independent check runs after all grouping is complete: every non-blank value in the partner column is normalized (trimmed and case-folded) and compared against the clients list's column named by CLIENT_NAME_COLUMN in config.py. This check has no effect on grouping, balancing, confirmed entries, or flagged rows — it only reports which partner values were not found.
+If a clients list is supplied alongside the journal, an additional, independent check runs after all grouping is complete: every non-blank value in the partner column is normalized (trimmed and case-folded) and compared against the clients list's column named by `CLIENT_NAME_COLUMN` in `config.py`. This check has no effect on grouping, balancing, confirmed entries, or flagged rows — it only reports which partner values were not found.
 
 Each unmatched value is further classified by the same fuzzy text-similarity measure used elsewhere for communications (Step 3's 95% threshold, but a lower 85% threshold here since partner names are shorter and more varied than communications). If an unmatched name is at or above that similarity to some known client name, it's reported as a probable typo together with its closest match, so a human can quickly verify whether it's the same client misspelled. Below that similarity, it's reported as a plain unknown with no suggested match. This is only a suggestion for review — never an automatic correction.
 
@@ -132,7 +108,7 @@ For a CSV journal, the unmatched partner names (with their occurrence counts, cl
 
 ---
 
-**Limitations**
+## Limitations
 
 The algorithm cannot resolve entries whose missing balance matches multiple equally plausible candidates in the rest of the file — these are flagged as ambiguous and require manual review. This is most likely to happen on journals where the same fixed amount (a flat fee, a standard commission, a recurring tax line) legitimately recurs across many distinct entries, since amount alone can no longer disambiguate. The stray-line search is capped at combinations of up to 3 lines, so entries missing 4 or more scattered lines will not be automatically recovered. A typo in the date field of any line will silently send it to the wrong date bucket, making its original entry appear unbalanced with no way to detect or correct this automatically. The final split attempt (Step 6) is capped at 20 lines to prevent exponential slowdown on very large groups — a group exceeding this limit that cannot be resolved by the earlier steps will produce more flagged rows than strictly necessary. Finally the verification step confirms data integrity end to end but cannot detect semantically wrong groupings that happen to balance — a human review of flagged items and spot-checking of low-confidence entries remains necessary.
 

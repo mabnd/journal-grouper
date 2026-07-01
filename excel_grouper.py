@@ -7,10 +7,9 @@ input column names are defined in config.py (INPUT_COLUMNS).
 
 All algorithm logic lives in journal_grouper_core.py — this file only
 handles reading workbook sheets into row dicts and writing the result back
-out as a new workbook (one output sheet per input sheet). See algorithm.txt
-for the full step-by-step specification, and csv_grouper.py for the
-equivalent single-journal CSV entry point (same core logic, different file
-format).
+out as a new workbook (one output sheet per input sheet). See algorithm.md for the full step-by-step specification, and
+csv_grouper.py for the equivalent single-journal CSV entry point (same
+core logic, different file format).
 
 Usage:
     python excel_grouper.py input.xlsx [clients.csv]

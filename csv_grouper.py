@@ -6,7 +6,7 @@ journal entry lines from a single-journal CSV file into balanced entries.
 
 All algorithm logic lives in journal_grouper_core.py — this file only
 handles reading a CSV into row dicts and writing the result back out as
-CSV. See algorithm.txt for the full step-by-step specification, and
+CSV. See algorithm.md for the full step-by-step specification, and
 excel_grouper.py for the equivalent multi-sheet Excel entry point (same
 core logic, different file format).
 

@@ -2,7 +2,7 @@
 journal_grouper_core.py
 ========================
 Format-agnostic core of the journal-entry grouping algorithm. See
-algorithm.txt for the full step-by-step specification.
+algorithm.md for the full step-by-step specification.
 
 This module knows nothing about CSV or Excel — it operates purely on lists
 of row dicts. Each row dict must carry:
