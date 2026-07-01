@@ -1,6 +1,6 @@
 # Journal Entry Grouper
 
-Takes a flat export of bookkeeping lines and reconstructs the original **journal entries** — grouping lines so that debits equal credits within each entry.
+A script that fixes unstructured journal files by automatically grouping lines into the entries they belong to.
 
 Works with CSV files and Excel workbooks.
 
