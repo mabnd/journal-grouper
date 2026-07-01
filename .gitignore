@@ -4,6 +4,9 @@
 *.xlsx
 *.xls
 
+# Example files are synthetic and safe to commit.
+!example/**
+
 # Python
 __pycache__/
 *.pyc

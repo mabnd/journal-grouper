@@ -1,0 +1,9 @@
+﻿Journal,Date de facturation,Code,Communication,Partenaire,Débit,Crédit
+BNK,01/01/26,411000,Invoice #1042,Client A,500.00,
+BNK,01/01/26,621000,Salary Jan,,3000.00,
+BNK,01/01/26,512000,Salary Jan,,,3000.00
+BNK,01/01/26,512000,Invoice #1042,,,500.00
+BNK,02/01/26,613000,Office Rent,,1200.00,
+BNK,02/01/26,445660,VAT on Rent,,240.00,
+BNK,02/01/26,512000,Office Rent,,,1440.00
+BNK,03/01/26,658000,Misc expense,,750.00,

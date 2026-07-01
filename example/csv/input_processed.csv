@@ -1,0 +1,14 @@
+﻿Journal,Date,Référence,Ecritures comptables / Compte,Ecritures comptables / Libellés,Ecritures comptables / partenaire,Ecritures comptables /Debit,Ecritures comptables /Credit,CONFIDENCE_SCORE,FLAG_REASON
+BNK,01/01/2026,IMPORT MOUVEMENT,411000,Invoice #1042,Client A,500.00,,80,
+,,,512000,Invoice #1042,,,500.00,,
+,,,,,,,,,
+BNK,01/01/2026,IMPORT MOUVEMENT,621000,Salary Jan,,3000.00,,90,
+,,,512000,Salary Jan,,,3000.00,,
+,,,,,,,,,
+BNK,02/01/2026,IMPORT MOUVEMENT,613000,Office Rent,,1200.00,,90,
+,,,445660,VAT on Rent,,240.00,,,
+,,,512000,Office Rent,,,1440.00,,
+,,,,,,,,,
+FLAGGED FOR MANUAL REVIEW,,,,,,,,,
+,,,,,,,,,
+BNK,03/01/2026,IMPORT MOUVEMENT,658000,Misc expense,,750.00,,0,Ligne sans correspondance — aucune autre ligne n'a pu être trouvée pour que les débits et crédits s'équilibrent. Vérifiez si une ligne est manquante ou si un montant est incorrect.
